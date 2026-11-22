@@ -1,1 +1,22 @@
+name: pixel_shadow_odyssey
+description: 2D Pixel Action Platformer & RPG
+publish_to: 'none'
+version: 2.0.0+2
 
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+    - assets/js/
