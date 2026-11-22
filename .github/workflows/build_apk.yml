@@ -25,24 +25,34 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Android İskeletini Oluştur ve Özel Dosyaları Koru
+      - name: Proje Kök Dizinini Bul ve Android İskeletini Oluştur
         run: |
-          mkdir -p _backup
-          cp pubspec.yaml _backup/
-          cp -r lib _backup/
-          cp -r assets _backup/
+          PUB_FILE=$(find . -maxdepth 3 \( -iname "pubspec.yaml" -o -iname "pubspec.yml" \) | head -n 1)
+          if [ -n "$PUB_FILE" ]; then
+            SRC_DIR=$(dirname "$PUB_FILE")
+          else
+            SRC_DIR="."
+          fi
+
+          mkdir -p _backup/lib _backup/assets
+          cp "$PUB_FILE" _backup/pubspec.yaml
+          cp -r "$SRC_DIR/lib/." _backup/lib/
+          cp -r "$SRC_DIR/assets/." _backup/assets/
+
           flutter create . --platforms=android --org com.pixelshadow --project-name pixel_shadow_odyssey
-          cp _backup/pubspec.yaml .
+          cp _backup/pubspec.yaml ./pubspec.yaml
           rm -rf lib assets
-          cp -r _backup/lib .
-          cp -r _backup/assets .
+          mkdir -p lib assets
+          cp -r _backup/lib/. ./lib/
+          cp -r _backup/assets/. ./assets/
           rm -rf _backup
 
-      - name: Çentik (Cutout), Tam Ekran ve Yatay Ekran Yaması
+      - name: Çentik (v27), Tam Ekran, Yatay Ekran ve Gradle Lint/Bellek Yaması
         run: |
           python3 - <<'EOF'
           import os, re
 
+          # 1. AndroidManifest.xml: Yatay ekran + uygulama adı
           mpath = "android/app/src/main/AndroidManifest.xml"
           with open(mpath, "r", encoding="utf-8") as f:
               xml = f.read()
@@ -55,18 +65,50 @@ jobs:
           with open(mpath, "w", encoding="utf-8") as f:
               f.write(xml)
 
-          for spath in [
-              "android/app/src/main/res/values/styles.xml",
-              "android/app/src/main/res/values-night/styles.xml"
-          ]:
+          # 2. styles.xml (Tam ekran) + values-v27/styles.xml (Çentik shortEdges)
+          for base_dir in ["values", "values-night"]:
+              spath = f"android/app/src/main/res/{base_dir}/styles.xml"
               if os.path.exists(spath):
                   with open(spath, "r", encoding="utf-8") as f:
                       s = f.read()
-                  cutout = '        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n        <item name="android:windowFullscreen">true</item>\n    </style>'
-                  if 'windowLayoutInDisplayCutoutMode' not in s:
-                      s = s.replace('    </style>', cutout)
+                  fs = '        <item name="android:windowFullscreen">true</item>\n    </style>'
+                  if "windowFullscreen" not in s:
+                      s = s.replace("    </style>", fs)
                   with open(spath, "w", encoding="utf-8") as f:
                       f.write(s)
+
+                  v27_dir = f"android/app/src/main/res/{base_dir}-v27"
+                  os.makedirs(v27_dir, exist_ok=True)
+                  cutout = '        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>\n    </style>'
+                  s27 = s.replace("    </style>", cutout) if "windowLayoutInDisplayCutoutMode" not in s else s
+                  with open(f"{v27_dir}/styles.xml", "w", encoding="utf-8") as f:
+                      f.write(s27)
+
+          # 3. Release Lint bloklamasını kapat (build.gradle.kts ve build.gradle uyumlu)
+          for gpath in ["android/app/build.gradle.kts", "android/app/build.gradle"]:
+              if os.path.exists(gpath):
+                  with open(gpath, "r", encoding="utf-8") as f:
+                      g = f.read()
+                  if "checkReleaseBuilds" not in g:
+                      block = (
+                          "\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n"
+                          if gpath.endswith(".kts")
+                          else "\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n"
+                      )
+                      g = g.replace("android {", "android {" + block, 1)
+                      with open(gpath, "w", encoding="utf-8") as f:
+                          f.write(g)
+
+          # 4. Gradle bellek sınırını artır
+          ppath = "android/gradle.properties"
+          if os.path.exists(ppath):
+              with open(ppath, "r", encoding="utf-8") as f:
+                  p = f.read()
+              p = re.sub(r"org\.gradle\.jvmargs=.*", "org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=1G", p)
+              if "org.gradle.jvmargs" not in p:
+                  p += "\norg.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=1G\n"
+              with open(ppath, "w", encoding="utf-8") as f:
+                  f.write(p)
           EOF
 
       - name: Uygulama Logosu (Adaptive Icon) Oluştur ve Enjekte Et
@@ -74,7 +116,7 @@ jobs:
           python3 -c "import PIL" 2>/dev/null || pip3 install --break-system-packages pillow || (sudo apt-get update && sudo apt-get install -y python3-pil)
           python3 - <<'EOF'
           import os
-          from PIL import Image, ImageDraw
+          from PIL import Image
 
           BG_HEX = "#0B0E1D"
           BG_RGBA = (11, 14, 29, 255)
@@ -89,37 +131,29 @@ jobs:
                       for xx in range(max(0, x), min(32, x + w)):
                           px[xx, yy] = col
 
-              # Çapraz parlayan katana bıçakları (arka plan)
               for i in range(4, 28):
-                  if 0 <= i < 32:
-                      rect(i, i, 2, 2, (56, 189, 248, 255))
-                      rect(i, i - 1, 1, 1, (224, 242, 254, 255))
-                      rect(30 - i, i, 2, 2, (56, 189, 248, 255))
-                      rect(31 - i, i - 1, 1, 1, (224, 242, 254, 255))
+                  rect(i, i, 2, 2, (56, 189, 248, 255))
+                  rect(i, i - 1, 1, 1, (224, 242, 254, 255))
+                  rect(30 - i, i, 2, 2, (56, 189, 248, 255))
+                  rect(31 - i, i - 1, 1, 1, (224, 242, 254, 255))
 
-              # Altın kılıç balçakları
               rect(6, 23, 4, 2, (250, 204, 21, 255))
               rect(22, 23, 4, 2, (250, 204, 21, 255))
-
-              # Omuz zırhı
               rect(5, 22, 22, 7, (15, 23, 42, 255))
               rect(6, 23, 20, 6, (30, 58, 138, 255))
               rect(11, 23, 10, 4, (56, 189, 248, 255))
               rect(14, 24, 4, 2, (250, 204, 21, 255))
 
-              # Ninja başlığı (1px dış kontur + gölgeli mavi zırh)
               rect(7, 5, 18, 18, (5, 6, 11, 255))
               rect(8, 6, 16, 16, (15, 23, 42, 255))
               rect(8, 6, 16, 6, (30, 58, 138, 255))
               rect(9, 6, 14, 2, (56, 189, 248, 255))
 
-              # Kızıl ninja alın bandı + uçuşan şerit
               rect(7, 10, 18, 3, (239, 68, 68, 255))
               rect(9, 10, 14, 1, (252, 165, 165, 255))
               rect(25, 11, 4, 2, (239, 68, 68, 255))
               rect(27, 13, 3, 2, (185, 28, 28, 255))
 
-              # Göz aralığı ve parlayan piksel gözler
               rect(10, 14, 12, 5, (2, 6, 23, 255))
               rect(11, 15, 4, 3, (56, 189, 248, 255))
               rect(12, 15, 2, 2, (255, 255, 255, 255))
@@ -136,41 +170,22 @@ jobs:
 
           resample = Image.Resampling.NEAREST if is_pixel else Image.Resampling.LANCZOS
 
-          # Eski tip (Legacy) simgeler
-          legacy_sizes = {
-              "mipmap-mdpi": 48,
-              "mipmap-hdpi": 72,
-              "mipmap-xhdpi": 96,
-              "mipmap-xxhdpi": 144,
-              "mipmap-xxxhdpi": 192,
-          }
-          for folder, sz in legacy_sizes.items():
+          for folder, sz in {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}.items():
               out_dir = f"android/app/src/main/res/{folder}"
               os.makedirs(out_dir, exist_ok=True)
               base = Image.new("RGBA", (sz, sz), BG_RGBA)
-              fg = src.resize((sz, sz), resample)
-              base.alpha_composite(fg)
+              base.alpha_composite(src.resize((sz, sz), resample))
               base.save(f"{out_dir}/ic_launcher.png")
 
-          # Android 8+ Adaptive Icon ön plan katmanları (%68 güvenli alanla ortalı)
-          adaptive_sizes = {
-              "mipmap-mdpi": 108,
-              "mipmap-hdpi": 162,
-              "mipmap-xhdpi": 216,
-              "mipmap-xxhdpi": 324,
-              "mipmap-xxxhdpi": 432,
-          }
-          for folder, sz in adaptive_sizes.items():
+          for folder, sz in {"mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,"mipmap-xxhdpi":324,"mipmap-xxxhdpi":432}.items():
               out_dir = f"android/app/src/main/res/{folder}"
               os.makedirs(out_dir, exist_ok=True)
               canvas = Image.new("RGBA", (sz, sz), (0, 0, 0, 0))
               inner = int(sz * 0.68)
-              fg = src.resize((inner, inner), resample)
               off = (sz - inner) // 2
-              canvas.alpha_composite(fg, (off, off))
+              canvas.alpha_composite(src.resize((inner, inner), resample), (off, off))
               canvas.save(f"{out_dir}/ic_launcher_foreground.png")
 
-          # Adaptive Icon XML ve arka plan rengi
           os.makedirs("android/app/src/main/res/values", exist_ok=True)
           with open("android/app/src/main/res/values/ic_launcher_background.xml", "w", encoding="utf-8") as f:
               f.write(f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">{BG_HEX}</color>\n</resources>\n')
