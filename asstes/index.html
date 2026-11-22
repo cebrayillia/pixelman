@@ -1,1 +1,308 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Gölge Piksel: Destan</title>
+<style>
+:root{
+  --bg:#070810;--panel:#121629;--border:#34416b;
+  --gold:#fbbf24;--emerald:#10b981;--hp:#f43f5e;--ulti:#38bdf8;
+  --text:#f1f5f9;--muted:#94a3b8;
+  --safe-l:max(10px, env(safe-area-inset-left));
+  --safe-r:max(10px, env(safe-area-inset-right));
+  --safe-t:max(6px, env(safe-area-inset-top));
+  --safe-b:max(8px, env(safe-area-inset-bottom));
+}
+*{box-sizing:border-box;margin:0;padding:0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;font-family:'Courier New',monospace;}
+html,body{width:100vw;height:100vh;overflow:hidden;background:#05060b;color:var(--text);}
+canvas#game{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;display:block;}
 
+.screen{position:fixed;inset:0;z-index:20;display:none;flex-direction:column;background:radial-gradient(ellipse at 50% 15%,#1a2244 0%,#06070f 85%);padding:var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);}
+.screen.active{display:flex;}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:rgba(12,15,28,0.95);border:2px solid var(--border);border-radius:10px;flex-shrink:0;}
+.brand{font-size:17px;font-weight:900;letter-spacing:1px;color:#fff;text-shadow:0 2px 0 #4c1d95,0 0 12px #38bdf8;}
+.res-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.pill{display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:8px;background:#0a0d1a;border:1px solid var(--border);font-size:12px;font-weight:800;}
+.pill.gold{color:var(--gold);border-color:#854d0e;}
+.pill.em{color:var(--emerald);border-color:#065f46;}
+.pill.lvl{color:#d8b4fe;border-color:#6b21a8;cursor:pointer;}
+.btn{cursor:pointer;border:2px solid #4c5b94;background:linear-gradient(180deg,#2c3761,#181f38);color:#fff;font-weight:800;border-radius:8px;padding:7px 12px;font-size:12px;transition:transform .07s;display:inline-flex;align-items:center;justify-content:center;gap:5px;}
+.btn:active{transform:scale(0.94);}
+.btn.primary{background:linear-gradient(180deg,#3b82f6,#1d4ed8);border-color:#93c5fd;}
+.btn.gold{background:linear-gradient(180deg,#f59e0b,#b45309);border-color:#fde047;color:#111;}
+.btn.em{background:linear-gradient(180deg,#10b981,#047857);border-color:#6ee7b7;color:#052e16;}
+.btn.danger{background:linear-gradient(180deg,#ef4444,#991b1b);border-color:#fca5a5;}
+.btn.sm{padding:4px 8px;font-size:11px;}
+.btn:disabled{opacity:0.42;filter:grayscale(0.7);cursor:not-allowed;}
+
+.home-body{flex:1;display:grid;grid-template-columns:1.15fr 1fr;gap:10px;margin-top:8px;min-height:0;}
+.card{background:rgba(18,22,41,0.94);border:2px solid var(--border);border-radius:11px;padding:10px;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.hero-showcase{position:relative;align-items:center;justify-content:space-between;background:radial-gradient(circle at 50% 48%,#252f59 0%,#0b0e1c 82%);}
+#menuHeroCanvas{width:240px;height:165px;image-rendering:pixelated;}
+.nav-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;}
+.nav-tile{border:2px solid var(--border);border-radius:10px;background:linear-gradient(145deg,#1d2442,#101426);padding:10px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;}
+.nav-tile:active{transform:scale(0.97);border-color:#60a5fa;}
+.nav-tile h3{font-size:13px;color:#fff;}
+.nav-tile p{font-size:10px;color:var(--muted);}
+.nav-tile.play{grid-column:1 / -1;background:linear-gradient(135deg,#1d4ed8,#5b21b6);border-color:#93c5fd;}
+.nav-tile.play h3{font-size:16px;}
+
+.scroll{overflow-y:auto;touch-action:pan-y;flex:1;padding-right:4px;}
+.scroll::-webkit-scrollbar{width:5px;}
+.scroll::-webkit-scrollbar-thumb{background:#475569;border-radius:4px;}
+
+.lvl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;padding:4px 0;}
+.dist-hdr{grid-column:1 / -1;font-size:11px;font-weight:900;color:#93c5fd;padding:5px 8px;background:#0d1224;border-left:3px solid #38bdf8;border-radius:4px;margin-top:4px;}
+.lvl-box{border:2px solid var(--border);border-radius:8px;padding:7px 4px;text-align:center;background:#14182b;cursor:pointer;}
+.lvl-box.unlocked{border-color:#38bdf8;background:linear-gradient(180deg,#1d2a4d,#101629);}
+.lvl-box.cleared{border-color:var(--emerald);background:linear-gradient(180deg,#0f352a,#0b1e19);}
+.lvl-box.locked{opacity:0.4;cursor:not-allowed;}
+.lvl-box .num{font-size:15px;font-weight:900;}
+.lvl-box .sub{font-size:9px;color:var(--muted);margin-top:2px;}
+
+.tabs{display:flex;gap:6px;margin-top:6px;flex-shrink:0;}
+.tab{flex:1;padding:7px;border:2px solid var(--border);background:#0f1324;color:var(--muted);font-weight:800;font-size:11px;border-radius:8px;cursor:pointer;text-align:center;}
+.tab.active{background:#242e57;color:#fff;border-color:#60a5fa;}
+.split{flex:1;display:grid;grid-template-columns:1.1fr 1fr;gap:8px;margin-top:6px;min-height:0;}
+.item-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:6px;align-content:start;}
+.item-card{border:2px solid var(--border);border-radius:8px;padding:6px;background:#111526;cursor:pointer;display:flex;flex-direction:column;gap:2px;}
+.item-card.selected{border-color:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,0.35);}
+.item-card.equipped{border-color:var(--emerald);}
+.rarity-1{border-top:3px solid #94a3b8;}
+.rarity-2{border-top:3px solid #4ade80;}
+.rarity-3{border-top:3px solid #38bdf8;}
+.rarity-4{border-top:3px solid #c084fc;}
+.rarity-5{border-top:3px solid #facc15;}
+.badge{font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;background:#090d1a;display:inline-block;width:max-content;}
+.stat-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px dashed #293152;}
+.stat-up{color:var(--emerald);font-weight:800;}
+.mat-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;}
+.mat-chip{font-size:11px;padding:3px 7px;border-radius:6px;background:#0b0e1c;border:1px solid #334155;}
+.dng-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:8px;padding:4px 0;}
+.dng-card{border:2px solid var(--border);border-radius:10px;padding:9px;background:linear-gradient(160deg,#1a2038,#0e1120);display:flex;flex-direction:column;justify-content:space-between;gap:6px;}
+
+/* IN-GAME HUD & ERGONOMIC COMBAT CONTROLS */
+#hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none;}
+#hud.active{display:block;}
+.hud-top{position:absolute;top:var(--safe-t);left:var(--safe-l);right:var(--safe-r);display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
+.hud-left{background:rgba(9,11,22,0.82);border:1.5px solid #3b4878;border-radius:9px;padding:5px 8px;min-width:210px;}
+.bar-wrap{height:11px;background:#1e293b;border-radius:5px;overflow:hidden;border:1px solid #475569;margin-top:3px;position:relative;}
+.bar-fill{height:100%;transition:width .1s;}
+.bar-hp{background:linear-gradient(90deg,#e11d48,#fb7185);}
+.bar-ulti{background:linear-gradient(90deg,#0284c7,#38bdf8);}
+.bar-txt{position:absolute;inset:0;font-size:9px;line-height:10px;text-align:center;font-weight:900;text-shadow:0 1px 2px #000;}
+.hud-center{background:rgba(9,11,22,0.82);border:1.5px solid #3b4878;border-radius:9px;padding:4px 10px;text-align:center;min-width:180px;}
+.zone-steps{display:flex;gap:4px;justify-content:center;margin-top:3px;}
+.z-dot{width:26px;height:6px;border-radius:3px;background:#334155;}
+.z-dot.done{background:var(--emerald);}
+.z-dot.now{background:#38bdf8;box-shadow:0 0 6px #38bdf8;}
+.hud-right{display:flex;gap:6px;align-items:center;pointer-events:auto;}
+
+#bossHud{position:absolute;top:calc(var(--safe-t) + 52px);left:50%;transform:translateX(-50%);width:min(390px,54vw);background:rgba(20,7,18,0.92);border:2px solid #f43f5e;border-radius:8px;padding:4px 8px;display:none;}
+#bossHud.show{display:block;}
+.boss-name{font-size:11px;font-weight:900;color:#fda4af;display:flex;justify-content:space-between;}
+#interactTip{position:absolute;bottom:calc(var(--safe-b) + 138px);left:50%;transform:translateX(-50%);background:rgba(15,23,42,0.94);border:2px solid #facc15;color:#fef08a;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:900;display:none;}
+
+.ctrl-left{position:absolute;bottom:var(--safe-b);left:var(--safe-l);display:grid;grid-template-columns:56px 52px 56px;grid-template-rows:46px 56px;gap:5px;pointer-events:auto;align-items:center;justify-items:center;}
+.ctrl-right{position:absolute;bottom:var(--safe-b);right:var(--safe-r);display:grid;grid-template-columns:repeat(4,56px);grid-template-rows:50px 58px;gap:6px;pointer-events:auto;align-items:center;justify-items:center;}
+.tbtn{width:56px;height:54px;border-radius:14px;background:rgba(18,24,46,0.72);border:2px solid rgba(148,163,184,0.55);color:#fff;font-size:17px;font-weight:900;display:flex;flex-direction:column;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+.tbtn span{font-size:8px;margin-top:1px;letter-spacing:0.4px;}
+.tbtn.smbtn{width:50px;height:44px;font-size:14px;}
+.tbtn.pressed{background:rgba(56,189,248,0.6);border-color:#7dd3fc;transform:scale(0.92);}
+.tbtn.atk{width:60px;height:58px;background:rgba(190,18,60,0.8);border-color:#fda4af;}
+.tbtn.jmp{width:58px;height:56px;background:rgba(21,128,61,0.8);border-color:#86efac;}
+.tbtn.skl{width:54px;height:48px;background:rgba(5,150,105,0.78);border-color:#6ee7b7;}
+.tbtn.pry{width:54px;height:48px;background:rgba(217,119,6,0.78);border-color:#fde047;}
+.tbtn.dsh{width:54px;height:52px;background:rgba(126,34,206,0.78);border-color:#d8b4fe;}
+.tbtn.ult{width:56px;height:48px;background:rgba(2,132,199,0.78);border-color:#7dd3fc;}
+.tbtn.ult.ready{box-shadow:0 0 15px #38bdf8;border-color:#fff;animation:pulse 0.85s infinite;}
+.tbtn.act{width:54px;height:48px;background:rgba(202,138,4,0.82);border-color:#fde047;opacity:0.32;}
+.tbtn.act.active{opacity:1;box-shadow:0 0 12px #facc15;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.07);}}
+
+.modal-bg{position:fixed;inset:0;z-index:40;background:rgba(4,5,12,0.85);display:none;align-items:center;justify-content:center;padding:12px;}
+.modal-bg.active{display:flex;}
+.modal{width:min(540px,92vw);max-height:88vh;background:var(--panel);border:2px solid #60a5fa;border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:9px;overflow:hidden;}
+.av-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:6px;}
+.av-item{border:2px solid var(--border);border-radius:8px;padding:4px;text-align:center;cursor:pointer;background:#0d1122;}
+.av-item.sel{border-color:#facc15;background:#292513;}
+.av-item.locked{opacity:0.34;cursor:not-allowed;}
+input[type=text],textarea{background:#090c18;border:1.5px solid var(--border);color:#fff;padding:6px 8px;border-radius:7px;font-size:12px;width:100%;touch-action:auto;user-select:text;-webkit-user-select:text;}
+.toast{position:fixed;top:calc(var(--safe-t) + 10px);left:50%;transform:translateX(-50%);z-index:60;background:#1e293b;border:2px solid #38bdf8;color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:800;display:none;box-shadow:0 4px 18px #000;}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="toast" class="toast"></div>
+
+<!-- HOME SCREEN -->
+<div id="screenHome" class="screen active">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <canvas id="topAvatar" width="32" height="32" style="border:2px solid #facc15;border-radius:6px;background:#0b0f1e;cursor:pointer;image-rendering:pixelated;" onclick="PSO.UI.openProfile()"></canvas>
+      <div>
+        <div class="brand" id="uiTitle">GÖLGE PİKSEL: DESTAN</div>
+        <div style="font-size:10px;color:var(--muted);" id="uiPlayerTag">Oyuncu • Sv.1</div>
+      </div>
+    </div>
+    <div class="res-row">
+      <div class="pill lvl" onclick="PSO.UI.openProfile()" id="pillLvl">⭐ Sv.1</div>
+      <div class="pill gold" id="pillGold">🪙 0</div>
+      <div class="pill em" id="pillEm">💎 0</div>
+      <button class="btn sm" onclick="PSO.UI.toggleSound()" id="btnSound">🔊</button>
+      <button class="btn sm" onclick="PSO.UI.cycleLang()" id="btnLang">TR</button>
+      <button class="btn sm" onclick="PSO.UI.openSettings()">⚙️</button>
+    </div>
+  </div>
+  <div class="home-body">
+    <div class="card hero-showcase">
+      <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:15px;font-weight:900;color:#fff;" id="homeHeroName">Kairo</div>
+          <div style="font-size:10px;color:#93c5fd;" id="homeHeroMeta">Sv.1 • Silah</div>
+        </div>
+        <div class="badge" style="color:#facc15;border:1px solid #ca8a04;" id="homePower">GÜÇ: 100</div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative;width:100%;">
+        <canvas id="menuHeroCanvas" width="240" height="165"></canvas>
+        <button class="btn sm" style="position:absolute;bottom:4px;right:4px;opacity:0.88;" onclick="PSO.UI.triggerMenuDemo()">⚔ 4'lü Kombo</button>
+      </div>
+      <div style="width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:5px;text-align:center;font-size:11px;" id="homeStats"></div>
+    </div>
+    <div class="nav-grid">
+      <div class="nav-tile play" onclick="PSO.UI.openScreen('screenLevels')">
+        <h3 id="tPlay">⚔️ MACERA (100 SEVİYE)</h3>
+        <p id="tPlaySub">5 Bölge • 2 Katlı Binalar • Asansör & Merdiven • Bosslar</p>
+      </div>
+      <div class="nav-tile" onclick="PSO.UI.openShop('chars')">
+        <h3 id="tChars">🥷 KARAKTER & SİLAH</h3>
+        <p id="tCharsSub">10 Kahraman • 40 Pasifli Silah • Yükseltme</p>
+      </div>
+      <div class="nav-tile" onclick="PSO.UI.openDungeons()">
+        <h3 id="tDng">🔥 5 ZİNDAN (GÜNLÜK 2x)</h3>
+        <p id="tDngSub">5 Yükseltme Malzemesi & 2 Fazlı Bosslar</p>
+      </div>
+      <div class="nav-tile" onclick="PSO.UI.openProfile()">
+        <h3 id="tProf">👑 PROFİL & AVATAR</h3>
+        <p id="tProfSub">Oyuncu Adı • 16 Piksel Avatar • Sv.100 Yolu</p>
+      </div>
+      <div class="nav-tile" onclick="PSO.UI.openShop('upgrade')">
+        <h3 id="tUpg">✨ GELİŞTİRME MERKEZİ</h3>
+        <p id="tUpgSub">Genshin Tarzı Seviye & Yükseltme</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 100 LEVELS SCREEN -->
+<div id="screenLevels" class="screen">
+  <div class="topbar">
+    <button class="btn sm" onclick="PSO.UI.openScreen('screenHome')">⬅ <span data-i18n="back">GERİ</span></button>
+    <div class="brand" style="font-size:15px;">100 SEVİYE HARİTASI</div>
+    <div class="res-row">
+      <div class="pill gold" id="lvlGold">🪙 0</div>
+      <div class="pill em" id="lvlEm">💎 0</div>
+    </div>
+  </div>
+  <div class="card" style="flex:1;margin-top:6px;">
+    <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Her seviye 4 uzun bölge: Dış Mekan → 2 Katlı Şirket/Okul/Otel (Asansörlü) → Karanlık Maden/Metro (Merdivenli) → Boss Arenası (3 Dirilme Noktası)</div>
+    <div class="scroll"><div class="lvl-grid" id="lvlGrid"></div></div>
+  </div>
+</div>
+
+<!-- SHOP & GENSHIN UPGRADE SCREEN -->
+<div id="screenShop" class="screen">
+  <div class="topbar">
+    <button class="btn sm" onclick="PSO.UI.openScreen('screenHome')">⬅ <span data-i18n="back">GERİ</span></button>
+    <div class="brand" style="font-size:15px;">MAĞAZA & GELİŞTİRME</div>
+    <div class="res-row">
+      <div class="pill gold" id="shopGold">🪙 0</div>
+      <div class="pill em" id="shopEm">💎 0</div>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" id="tabChars" onclick="PSO.UI.switchShopTab('chars')">🥷 KARAKTERLER (10)</div>
+    <div class="tab" id="tabWeapons" onclick="PSO.UI.switchShopTab('weapons')">⚔️ SİLAHLAR (40)</div>
+    <div class="tab" id="tabUpgrade" onclick="PSO.UI.switchShopTab('upgrade')">✨ GELİŞTİRME & YÜKSELTME</div>
+  </div>
+  <div class="split">
+    <div class="card"><div class="scroll"><div class="item-grid" id="shopList"></div></div></div>
+    <div class="card" id="shopDetail" style="justify-content:space-between;"></div>
+  </div>
+</div>
+
+<!-- 5 MATERIAL DUNGEONS SCREEN -->
+<div id="screenDungeons" class="screen">
+  <div class="topbar">
+    <button class="btn sm" onclick="PSO.UI.openScreen('screenHome')">⬅ <span data-i18n="back">GERİ</span></button>
+    <div class="brand" style="font-size:15px;">5 YÜKSELTME ZİNDANI</div>
+    <div class="pill" id="dngResetTimer">⏱ Sıfırlanma: 00:00:00</div>
+  </div>
+  <div class="card" style="flex:1;margin-top:6px;">
+    <div class="mat-bar" id="dngMatBar"></div>
+    <div class="scroll"><div class="dng-grid" id="dngGrid"></div></div>
+  </div>
+</div>
+
+<!-- IN-GAME HUD & TOUCH CONTROLS -->
+<div id="hud">
+  <div class="hud-top">
+    <div class="hud-left">
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:900;">
+        <span id="hudHero">Kairo</span>
+        <span id="hudCombo" style="color:#facc15;"></span>
+      </div>
+      <div class="bar-wrap"><div class="bar-fill bar-hp" id="barHp" style="width:100%"></div><div class="bar-txt" id="txtHp">100 / 100</div></div>
+      <div class="bar-wrap" style="height:8px;"><div class="bar-fill bar-ulti" id="barUlti" style="width:0%"></div><div class="bar-txt" style="font-size:7px;line-height:7px;" id="txtUlti">ULTİ %0</div></div>
+    </div>
+    <div class="hud-center">
+      <div style="font-size:11px;font-weight:900;color:#e2e8f0;" id="hudStage">SV.1 • DIŞ MEKAN</div>
+      <div class="zone-steps" id="zoneSteps"></div>
+      <div style="font-size:9px;color:#86efac;margin-top:2px;" id="hudCp">⚑ Dirilme: 0/3</div>
+    </div>
+    <div class="hud-right">
+      <div class="pill gold" style="padding:3px 7px;font-size:11px;" id="hudGold">🪙 0</div>
+      <button class="btn sm" onclick="PSO.UI.togglePause()">⏸</button>
+    </div>
+  </div>
+
+  <div id="bossHud">
+    <div class="boss-name"><span id="bossName">BOSS</span><span id="bossHpTxt">1000</span></div>
+    <div class="bar-wrap" style="height:10px;border-color:#f43f5e;"><div class="bar-fill bar-hp" id="bossBar" style="width:100%;background:linear-gradient(90deg,#be123c,#fb7185);"></div></div>
+    <div class="bar-wrap" style="height:5px;border-color:#ca8a04;margin-top:2px;"><div class="bar-fill" id="bossPoiseBar" style="width:100%;background:#facc15;"></div></div>
+  </div>
+  <div id="interactTip">🚪 GİRMEK İÇİN [GİR]</div>
+
+  <div class="ctrl-left">
+    <div style="grid-column:1;"></div>
+    <div class="tbtn smbtn" id="btnU" style="grid-column:2;">▲<span>ÇIK</span></div>
+    <div style="grid-column:3;"></div>
+    <div class="tbtn" id="btnL" style="grid-column:1;">◀<span>SOL</span></div>
+    <div class="tbtn smbtn" id="btnD" style="grid-column:2;">▼<span>İN</span></div>
+    <div class="tbtn" id="btnR" style="grid-column:3;">▶<span>SAĞ</span></div>
+  </div>
+  <div class="ctrl-right">
+    <div class="tbtn act" id="btnAct">🚪<span>GİR</span></div>
+    <div class="tbtn pry" id="btnParry">🛡️<span>PARRY</span></div>
+    <div class="tbtn skl" id="btnSkill">✦<span id="lblSkill">BECERİ</span></div>
+    <div class="tbtn ult" id="btnUlt">⚡<span>ULTİ</span></div>
+    <div style="grid-column:1;opacity:0;"></div>
+    <div class="tbtn dsh" id="btnDash">💨<span>KAÇ</span></div>
+    <div class="tbtn jmp" id="btnJmp">▲<span>ZIPLA</span></div>
+    <div class="tbtn atk" id="btnAtk">⚔<span>VUR</span></div>
+  </div>
+</div>
+
+<div id="modalBg" class="modal-bg"><div class="modal" id="modalBox"></div></div>
+
+<!-- MODULAR ENGINE BOOTSTRAP (STRICT DEPENDENCY ORDER) -->
+<script src="js/data.js"></script>
+<script src="js/pixel_bakery.js"></script>
+<script src="js/rig_renderer.js"></script>
+<script src="js/world_lighting.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
